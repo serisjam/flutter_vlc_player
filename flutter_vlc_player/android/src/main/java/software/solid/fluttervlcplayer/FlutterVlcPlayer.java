@@ -6,6 +6,7 @@ import android.net.Uri;
 import android.util.Base64;
 import android.util.Log;
 import android.view.View;
+import android.os.SystemClock;
 
 import androidx.annotation.Nullable;
 
@@ -14,6 +15,7 @@ import org.videolan.libvlc.Media;
 import org.videolan.libvlc.MediaPlayer;
 import org.videolan.libvlc.RendererDiscoverer;
 import org.videolan.libvlc.RendererItem;
+import org.videolan.libvlc.interfaces.IMedia;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -48,6 +50,11 @@ final class FlutterVlcPlayer implements PlatformView {
     private List<RendererDiscoverer> rendererDiscoverers = new ArrayList<>();
     private List<RendererItem> rendererItems = new ArrayList<>();
     private boolean isDisposed = false;
+
+    // FPS 统计相关
+    private long lastStatsTimeMs = 0L;
+    private int lastDisplayedPictures = 0;
+    private float cachedFps = 0f;
 
     // Platform view
     @Override
@@ -123,6 +130,7 @@ final class FlutterVlcPlayer implements PlatformView {
 
     public void initialize(List<String> options) {
         this.options = options;
+        resetFps(); // 新增：初始化时重置 FPS
         libVLC = new LibVLC(context, options);
         mediaPlayer = new MediaPlayer(libVLC);
         setupVlcMediaPlayer();
@@ -179,6 +187,7 @@ final class FlutterVlcPlayer implements PlatformView {
                                 eventObject.put("activeAudioTrack", mediaPlayer.getAudioTrack());
                                 eventObject.put("spuTracksCount", mediaPlayer.getSpuTracksCount());
                                 eventObject.put("activeSpuTrack", mediaPlayer.getSpuTrack());
+                                eventObject.put("fps", getCurrentFps()); // 新增：FPS
                                 mediaEventSink.success(eventObject.clone());
                                 break;
 
@@ -206,6 +215,7 @@ final class FlutterVlcPlayer implements PlatformView {
                                 eventObject.put("spuTracksCount", mediaPlayer.getSpuTracksCount());
                                 eventObject.put("activeSpuTrack", mediaPlayer.getSpuTrack());
                                 eventObject.put("isPlaying", mediaPlayer.isPlaying());
+                                eventObject.put("fps", getCurrentFps()); // 新增：FPS
                                 mediaEventSink.success(eventObject);
                                 break;
 
@@ -238,6 +248,41 @@ final class FlutterVlcPlayer implements PlatformView {
         );
     }
 
+    // 重置 FPS 状态（切换流 / 停止时调用）
+    private void resetFps() {
+        lastStatsTimeMs = 0L;
+        lastDisplayedPictures = 0;
+        cachedFps = 0f;
+    }
+
+    // 从 libVLC 的媒体统计中估算当前 FPS
+    private double getCurrentFps() {
+        if (mediaPlayer == null)
+            return 0.0;
+
+        IMedia media = mediaPlayer.getMedia();
+        if (media == null)
+            return cachedFps;
+
+        IMedia.Stats stats = media.getStats();
+        if (stats == null)
+            return cachedFps;
+
+        long now = SystemClock.elapsedRealtime();
+        if (lastStatsTimeMs != 0L) {
+            long dt = now - lastStatsTimeMs; // 毫秒
+            int dFrames = stats.displayedPictures - lastDisplayedPictures;
+            if (dt > 0 && dFrames >= 0) {
+                // FPS = Δ帧 / Δ时间(秒)
+                cachedFps = (float) dFrames * 1000f / dt;
+            }
+        }
+
+        lastStatsTimeMs = now;
+        lastDisplayedPictures = stats.displayedPictures;
+        return cachedFps;
+    }
+
     void play() {
         if (mediaPlayer != null && !mediaPlayer.isPlaying()) {
             mediaPlayer.play();
@@ -268,6 +313,8 @@ final class FlutterVlcPlayer implements PlatformView {
 
     void setStreamUrl(String url, boolean isAssetUrl, boolean autoPlay, long hwAcc) {
         if (mediaPlayer == null) return;
+
+        resetFps(); // 新增：每次切流前重置 FPS
 
         try {
             if (mediaPlayer.isPlaying()) {

@@ -413,6 +413,7 @@ class VLCPlayerEventStreamHandler: NSObject, FlutterStreamHandler, VLCMediaPlaye
         let position = player?.time.value?.intValue ?? 0
         let buffering = 100.0
         let isPlaying = player?.isPlaying ?? false
+        let fps = Double(player?.framesPerSecond ?? 0)   // 新增：FPS
                 
         switch player?.state {
         case .opening:
@@ -441,6 +442,7 @@ class VLCPlayerEventStreamHandler: NSObject, FlutterStreamHandler, VLCMediaPlaye
                 "activeAudioTrack": activeAudioTrack,
                 "spuTracksCount": spuTracksCount,
                 "activeSpuTrack": activeSpuTrack,
+                "fps": fps,
             ])
             
         case .ended:
@@ -463,6 +465,7 @@ class VLCPlayerEventStreamHandler: NSObject, FlutterStreamHandler, VLCMediaPlaye
                 "spuTracksCount": spuTracksCount,
                 "activeSpuTrack": activeSpuTrack,
                 "isPlaying": isPlaying,
+                "fps": fps,
             ])
             
         case .error:
@@ -519,6 +522,7 @@ class VLCPlayerEventStreamHandler: NSObject, FlutterStreamHandler, VLCMediaPlaye
         let activeSpuTrack = player?.currentVideoSubTitleIndex ?? 0
         let buffering = 100.0
         let isPlaying = player?.isPlaying ?? false
+        let fps = Double(player?.framesPerSecond ?? 0)   // 新增：FPS
         //
         if let position = player?.time.value {
             mediaEventSink([
@@ -534,6 +538,7 @@ class VLCPlayerEventStreamHandler: NSObject, FlutterStreamHandler, VLCMediaPlaye
                 "spuTracksCount": spuTracksCount,
                 "activeSpuTrack": activeSpuTrack,
                 "isPlaying": isPlaying,
+                "fps": fps,                // 新增字段
             ])
         }
     }
